@@ -1,0 +1,215 @@
+import streamlit as st
+
+# -------------------------
+# Page Configuration (MUST BE FIRST)
+# -------------------------
+st.set_page_config(
+    page_title="Borrower Risk Estimator | Quant Vision Labs",
+    page_icon="📉",
+    layout="centered"
+)
+
+# -------------------------
+# Hide Streamlit Default UI
+# -------------------------
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+# -------------------------
+# Premium Styling
+# -------------------------
+st.markdown("""
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 950px;
+    }
+
+    h1, h2, h3 {
+        color: #0B1B4D;
+    }
+
+    .stButton>button {
+        background-color: #2563EB;
+        color: white;
+        border-radius: 10px;
+        padding: 0.7rem 1.5rem;
+        font-weight: 600;
+        border: none;
+    }
+
+    .stButton>button:hover {
+        background-color: #1D4ED8;
+    }
+
+    .stMetric {
+        background-color: #F8FAFC;
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid #E5E7EB;
+    }
+
+    .stForm {
+        background-color: #FFFFFF;
+        padding: 25px;
+        border-radius: 16px;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# -------------------------
+# Logo Section (Centered)
+# -------------------------
+col1, col2, col3 = st.columns([1,2,1])
+with col2:
+    st.image("logo.png", width=300)
+
+# -------------------------
+# Title
+# -------------------------
+st.title("📉 Borrower Risk Estimator")
+st.write(
+    "Get an indicative borrower risk estimate using income, debt burden, "
+    "employment profile, and loan characteristics."
+)
+
+# -------------------------
+# Function
+# -------------------------
+def calculate_borrower_risk(
+    monthly_income, employment_status, years_employed,
+    loan_amount, interest_rate, loan_tenure_months,
+    existing_monthly_debt_payments, total_outstanding_debt,
+    prior_default_history, credit_score=None
+):
+
+    score = 0
+    loan_to_income_ratio = loan_amount / monthly_income if monthly_income > 0 else 10
+    debt_payment_ratio = existing_monthly_debt_payments / monthly_income if monthly_income > 0 else 1
+
+    # Loan burden
+    if loan_to_income_ratio > 2:
+        score += 25
+    elif loan_to_income_ratio > 1:
+        score += 15
+    else:
+        score += 5
+
+    # Debt burden
+    if debt_payment_ratio > 0.4:
+        score += 20
+    elif debt_payment_ratio > 0.2:
+        score += 10
+    else:
+        score += 3
+
+    # Employment
+    emp = employment_status.lower()
+    if emp in ["unemployed", "contract"]:
+        score += 20
+    elif emp == "self-employed":
+        score += 12
+    else:
+        score += 5
+
+    # Stability
+    if years_employed < 1:
+        score += 15
+    elif years_employed < 3:
+        score += 8
+    else:
+        score += 3
+
+    # Default history
+    if prior_default_history == "Yes":
+        score += 20
+
+    # Credit score
+    if credit_score is not None:
+        if credit_score < 500:
+            score += 20
+        elif credit_score < 650:
+            score += 10
+        else:
+            score += 2
+
+    probability_of_default = min(max(score, 5), 95)
+
+    if probability_of_default < 20:
+        risk_category = "Low Risk"
+        interpretation = "Borrower appears relatively lower risk."
+    elif probability_of_default < 40:
+        risk_category = "Moderate Risk"
+        interpretation = "Borrower shows some elevated risk factors."
+    elif probability_of_default < 65:
+        risk_category = "Elevated Risk"
+        interpretation = "Borrower profile suggests materially elevated risk."
+    else:
+        risk_category = "High Risk"
+        interpretation = "Borrower appears high risk."
+
+    return {
+        "probability_of_default": round(probability_of_default, 2),
+        "risk_category": risk_category,
+        "loan_to_income_ratio": round(loan_to_income_ratio, 2),
+        "debt_payment_ratio": round(debt_payment_ratio * 100, 2),
+        "interpretation": interpretation
+    }
+
+# -------------------------
+# Form
+# -------------------------
+with st.form("borrower_risk_form"):
+    monthly_income = st.number_input("Monthly Income (₦)", min_value=0.0, step=1000.0)
+    employment_status = st.selectbox("Employment Status", ["Salaried", "Self-Employed", "Contract", "Unemployed"])
+    years_employed = st.number_input("Years Employed", min_value=0.0, step=1.0)
+    loan_amount = st.number_input("Loan Amount (₦)", min_value=0.0, step=1000.0)
+    interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, step=0.5)
+    loan_tenure_months = st.number_input("Loan Tenure (Months)", min_value=1, step=1)
+    existing_monthly_debt_payments = st.number_input("Existing Monthly Debt Payments (₦)", min_value=0.0, step=1000.0)
+    total_outstanding_debt = st.number_input("Total Outstanding Debt (₦)", min_value=0.0, step=1000.0)
+    prior_default_history = st.selectbox("Prior Default History", ["No", "Yes"])
+    credit_score = st.number_input("Credit Score (Optional)", min_value=0, max_value=1000, step=1)
+
+    submitted = st.form_submit_button("Estimate Risk")
+
+# -------------------------
+# Results
+# -------------------------
+if submitted:
+
+    if monthly_income <= 0:
+        st.error("Monthly income must be greater than zero.")
+    else:
+        credit_score_input = credit_score if credit_score > 0 else None
+
+        result = calculate_borrower_risk(
+            monthly_income, employment_status, years_employed,
+            loan_amount, interest_rate, loan_tenure_months,
+            existing_monthly_debt_payments, total_outstanding_debt,
+            prior_default_history, credit_score_input
+        )
+
+        st.success("Assessment Complete")
+
+        st.metric("Probability of Default", f"{result['probability_of_default']}%")
+        st.metric("Risk Category", result['risk_category'])
+
+        st.subheader("Key Indicators")
+        st.write(f"Loan-to-Income Ratio: **{result['loan_to_income_ratio']}**")
+        st.write(f"Debt Payment Ratio: **{result['debt_payment_ratio']}%**")
+
+        st.write(f"**Interpretation:** {result['interpretation']}")
+
+        st.info("Indicative output only. For deeper credit analysis, contact Quant Vision Labs.")
+
+        st.markdown("### Need a More Detailed Review?")
+        st.markdown("[Request Consultation](https://quantvisionlabs.com/request-consultation)")
